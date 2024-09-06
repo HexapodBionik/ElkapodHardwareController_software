@@ -57,46 +57,12 @@
 /* USER CODE BEGIN Variables */
 
 ICM20948_DATA data;
-uint8_t flag = 0;
-volatile int counter = 0;
-int counter2 = 0;
-uint8_t counter3 = 0;
-uint8_t ready = 0;
-
-volatile float accelX = 0;
-volatile float accelY = 0;
-volatile float accelZ = 0;
-
-volatile float gyroX = 0;
-volatile float gyroY = 0;
-volatile float gyroZ = 0;
-
 volatile float euler_angles[4] = {0, 0, 0, 0};
-volatile float global_pitch = 0;
-volatile float global_pitchKF = 0;
-
-
-const osMutexAttr_t data_mutex_attr = {
-  .name="data_mutex",
-  .attr_bits = osMutexPrioInherit,
-  .cb_mem = &data,
-  .cb_size = sizeof(data),
-
-  };
-
-
-
-osMutexId_t data_mutex;
-
 
 
 TimerHandle_t my_timer;
-
-
-
 IMU_HANDLE handle ={
   .data = &data,
-  .data_mutex = &data_mutex,
   .euler_angles = euler_angles,
 };
 
@@ -112,7 +78,7 @@ const osThreadAttr_t defaultTask_attributes = {
 osThreadId_t IMUHandle;
 const osThreadAttr_t IMU_attributes = {
   .name = "IMU",
-  .stack_size = 256 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 
@@ -135,16 +101,9 @@ int _write(int file, char *ptr, int len) {
   return len;
 }
 
-
-
-
 void imu_update() {
-
-
-
   ICM20948_ReadAccelData_DMA(&hi2c1, &data);
   ICM20948_ReadAccelData_DMA_complete(&data);
-
 }
 
 /* USER CODE END FunctionPrototypes */
@@ -164,10 +123,6 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
    /* Run time stack overflow checking is performed if
    configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
    called if a stack overflow is detected. */
-  for(;;) {
-    HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-    osDelay(100);
-  }
 }
 /* USER CODE END 4 */
 
@@ -179,15 +134,9 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
-  data_mutex = osMutexNew(&data_mutex_attr);
-  MX_USB_DEVICE_Init();
-
   ICM20948_Init(&hi2c1);
-
-  my_timer = xTimerCreate("imu_update", 10 / portTICK_PERIOD_MS, pdTRUE, (void*)0, imu_update);
+  my_timer = xTimerCreate("imu_update", IMU_MEASURE_RATE_MS / portTICK_PERIOD_MS, pdTRUE, (void*)0, imu_update);
   xTimerStart(my_timer, portMAX_DELAY);
-
-
 
   /* USER CODE END Init */
 
@@ -237,24 +186,10 @@ void StartDefaultTask(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN StartDefaultTask */
   /* Infinite loop */
-  float pitch = 21.1;
-  float roll = 17.5;
-  float pitch_kf = 0;
-  float roll_kf = 0;
 
   for(;;)
   {
-
-    roll = euler_angles[0];
-    pitch = euler_angles[1];
-
-    roll_kf = euler_angles[2];
-    pitch_kf = euler_angles[3];
-
-
-
-
-    printf("Roll: %.04f\tPitch: %.04f\tRollKF: %.04f\tPitchKF: %.04f\r\n", roll, pitch, roll_kf, pitch_kf);
+    printf("Roll: %.02f\tPitch: %.02f\tRollKF: %.02f\tPitchKF: %.02f\r\n",  euler_angles[0],  euler_angles[1],  euler_angles[2],  euler_angles[3]);
     HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
     osDelay(100);
   }
