@@ -58,7 +58,7 @@ void imu_task(void* argument) {
     float roll = 0, pitch = 0;
     for(;;)
     {
-        HAL_GPIO_TogglePin(TASK_CHECK_1_GPIO_Port, TASK_CHECK_1_Pin);
+        HAL_GPIO_WritePin(TASK_CHECK_1_GPIO_Port, TASK_CHECK_1_Pin, GPIO_PIN_SET);
         accelX = handle->data->accel[0] + accel_offsets[0];
         accelY = handle->data->accel[1] + accel_offsets[1];
         accelZ = handle->data->accel[2] + accel_offsets[2];
@@ -92,7 +92,8 @@ void imu_task(void* argument) {
         handle->euler_angles[1] = pitch;
         handle->euler_angles[2] = xpost.coeff(0, 0);
         handle->euler_angles[3] = xpost.coeff(1, 0);
-        osDelay(IMU_MEASURE_RATE_MS * portTICK_PERIOD_MS);
         ++i;
+        HAL_GPIO_WritePin(TASK_CHECK_1_GPIO_Port, TASK_CHECK_1_Pin, GPIO_PIN_RESET);
+        osDelay(IMU_MEASURE_RATE_MS * portTICK_PERIOD_MS);
     }
 }

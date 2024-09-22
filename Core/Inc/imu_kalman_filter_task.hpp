@@ -8,7 +8,7 @@ extern "C"
 {
 #endif
     // IMU setup configuration
-    const uint8_t IMU_MEASURE_RATE_MS = 10;
+    const uint8_t IMU_MEASURE_RATE_MS = 20;
 
     typedef struct {
         ICM20948_DATA* data;

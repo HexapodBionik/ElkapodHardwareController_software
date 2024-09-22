@@ -35,6 +35,8 @@
 #include "imu_kalman_filter_task.hpp"
 #include "timers.h"
 
+#include "can.h"
+
 
 /* USER CODE END Includes */
 
@@ -56,6 +58,10 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 
+CAN_RxHeaderTypeDef RxHeader;
+uint8_t flag = 0;
+uint8_t RxData[8];
+
 ICM20948_DATA data;
 volatile float euler_angles[4] = {0, 0, 0, 0};
 
@@ -72,7 +78,7 @@ osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
   .stack_size = 256 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
+  .priority = (osPriority_t) osPriorityHigh,
 };
 /* Definitions for IMU */
 osThreadId_t IMUHandle;
@@ -106,6 +112,16 @@ void imu_update() {
   ICM20948_ReadAccelData_DMA_complete(&data);
 }
 
+void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan) {
+  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+  HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO1, &RxHeader, RxData);
+  if(RxHeader.DLC == 2) {
+    flag = 1;
+  }
+  flag = 1;
+}
+
+
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -133,6 +149,8 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
+  volatile HAL_StatusTypeDef status = HAL_CAN_Start(&hcan1);
+  volatile HAL_StatusTypeDef status2 = HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO1_MSG_PENDING);
 
   ICM20948_Init(&hi2c1);
   my_timer = xTimerCreate("imu_update", IMU_MEASURE_RATE_MS / portTICK_PERIOD_MS, pdTRUE, (void*)0, imu_update);
@@ -190,8 +208,11 @@ void StartDefaultTask(void *argument)
   for(;;)
   {
     printf("Roll: %.02f\tPitch: %.02f\tRollKF: %.02f\tPitchKF: %.02f\r\n",  euler_angles[0],  euler_angles[1],  euler_angles[2],  euler_angles[3]);
-    HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-    osDelay(100);
+    osDelay(50);
+    if(flag == 1) {
+      printf("Received a message\r\n");
+      flag = 0;
+    }
   }
   /* USER CODE END StartDefaultTask */
 }
