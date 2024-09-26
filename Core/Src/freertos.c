@@ -58,10 +58,7 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 
-CAN_RxHeaderTypeDef RxHeader;
-uint8_t flag = 0;
-uint8_t RxData[8];
-
+uint8_t can_test_data[2] = {21, 87};
 ICM20948_DATA data;
 volatile float euler_angles[4] = {0, 0, 0, 0};
 
@@ -78,7 +75,7 @@ osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
   .stack_size = 256 * 4,
-  .priority = (osPriority_t) osPriorityHigh,
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for IMU */
 osThreadId_t IMUHandle;
@@ -112,15 +109,15 @@ void imu_update() {
   ICM20948_ReadAccelData_DMA_complete(&data);
 }
 
-void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-  HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO1, &RxHeader, RxData);
-  if(RxHeader.DLC == 2) {
-    flag = 1;
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  if(GPIO_Pin == USER_PUSHBUTTON_Pin) {
+    CAN_send_data(0x100, can_test_data);
   }
-  flag = 1;
 }
 
+osThreadId_t* getDefaultTaskHandle() {
+  return &defaultTaskHandle;
+}
 
 /* USER CODE END FunctionPrototypes */
 
@@ -149,8 +146,8 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-  volatile HAL_StatusTypeDef status = HAL_CAN_Start(&hcan1);
-  volatile HAL_StatusTypeDef status2 = HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO1_MSG_PENDING);
+  HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO1_MSG_PENDING);
+  HAL_CAN_Start(&hcan1);
 
   ICM20948_Init(&hi2c1);
   my_timer = xTimerCreate("imu_update", IMU_MEASURE_RATE_MS / portTICK_PERIOD_MS, pdTRUE, (void*)0, imu_update);
@@ -205,14 +202,19 @@ void StartDefaultTask(void *argument)
   /* USER CODE BEGIN StartDefaultTask */
   /* Infinite loop */
 
+  uint32_t notification_value = 0;
+
   for(;;)
   {
     printf("Roll: %.02f\tPitch: %.02f\tRollKF: %.02f\tPitchKF: %.02f\r\n",  euler_angles[0],  euler_angles[1],  euler_angles[2],  euler_angles[3]);
     osDelay(50);
-    if(flag == 1) {
-      printf("Received a message\r\n");
-      flag = 0;
+    xTaskNotifyWait(0x00, 0xffffffff, &notification_value, 10);
+
+    if(notification_value > 0) {
+      HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+      notification_value = 0;
     }
+    //printf("Notification value: %d\r\n", notification_value);
   }
   /* USER CODE END StartDefaultTask */
 }

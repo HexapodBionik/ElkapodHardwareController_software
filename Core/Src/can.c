@@ -21,6 +21,26 @@
 #include "can.h"
 
 /* USER CODE BEGIN 0 */
+#include "cmsis_os.h"
+#include "memory.h"
+#include "task.h"
+#include "tim.h"
+
+
+static CAN_TxHeaderTypeDef TxHeader;
+static CAN_RxHeaderTypeDef RxHeader;
+
+static uint32_t TxMailbox;
+
+
+
+uint8_t RxBuffer[8];
+uint8_t TxBuffer[8];
+
+
+
+
+osThreadId_t* getDefaultTaskHandle();
 
 /* USER CODE END 0 */
 
@@ -59,9 +79,9 @@ void MX_CAN1_Init(void)
   sFilterConfig.FilterBank = 0;
   sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
   sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
-  sFilterConfig.FilterIdHigh = 0x446<<5;;
+  sFilterConfig.FilterIdHigh = 0x101<<5;;
   sFilterConfig.FilterIdLow = 0x0000;
-  sFilterConfig.FilterMaskIdHigh = 0x446<<5;;
+  sFilterConfig.FilterMaskIdHigh = 0x101<<5;;
   sFilterConfig.FilterMaskIdLow = 0x0000;
   sFilterConfig.FilterFIFOAssignment = 0;
   sFilterConfig.FilterActivation = ENABLE;
@@ -140,5 +160,47 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+
+void CAN_user_config() {
+  TxHeader.DLC = 8;
+  TxHeader.IDE = CAN_ID_STD;
+  TxHeader.RTR = CAN_RTR_DATA;
+}
+
+void CAN_error_handler() {
+
+}
+
+void CAN_send_data(uint32_t id, uint8_t* TxData) {
+  if(sizeof(TxData) <= 7) {
+    TxHeader.StdId = id;
+
+    // TODO Error if TxData length > sizeof(TxBuffer)
+
+    memcpy(TxBuffer, TxData, sizeof(TxData));
+
+    if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxBuffer, &TxMailbox) != HAL_OK) {
+      CAN_error_handler();
+    }
+
+  }
+  else {
+  }
+}
+
+static void CAN_consecutive_frames_transmission() {
+
+}
+
+void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef* hcan) {
+  HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO1, &RxHeader, RxBuffer);
+
+  if(RxHeader.DLC == 2) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(*(TaskHandle_t*)getDefaultTaskHandle(), &xHigherPriorityTaskWoken);
+  }
+}
+
 
 /* USER CODE END 1 */

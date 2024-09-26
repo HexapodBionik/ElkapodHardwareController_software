@@ -23,6 +23,7 @@
 #include "dma.h"
 #include "i2c.h"
 #include "quadspi.h"
+#include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
@@ -100,6 +101,7 @@ int main(void)
   MX_CAN1_Init();
   MX_QUADSPI_Init();
   MX_USART2_UART_Init();
+  MX_TIM17_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
