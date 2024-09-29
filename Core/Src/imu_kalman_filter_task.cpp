@@ -56,44 +56,51 @@ void imu_task(void* argument) {
 
     unsigned int i = 0;
     float roll = 0, pitch = 0;
+
+    uint32_t notification_value = 0;
     for(;;)
     {
-        HAL_GPIO_WritePin(TASK_CHECK_1_GPIO_Port, TASK_CHECK_1_Pin, GPIO_PIN_SET);
-        accelX = handle->data->accel[0] + accel_offsets[0];
-        accelY = handle->data->accel[1] + accel_offsets[1];
-        accelZ = handle->data->accel[2] + accel_offsets[2];
+        xTaskNotifyWait(0x00, 0xffffffff, &notification_value, 10);
 
-        u(0, 0) = handle->data->gyro[0];
-        u(1, 0) = handle->data->gyro[1];
+        if(notification_value > 0) {
+            HAL_GPIO_WritePin(TASK_CHECK_1_GPIO_Port, TASK_CHECK_1_Pin, GPIO_PIN_SET);
+            accelX = handle->data->accel[0] + accel_offsets[0];
+            accelY = handle->data->accel[1] + accel_offsets[1];
+            accelZ = handle->data->accel[2] + accel_offsets[2];
 
-        roll = atan2(accelY,accelZ) * 180 / M_PI;
-        pitch = atan2(accelX,accelZ) * 180 / M_PI;
+            u(0, 0) = handle->data->gyro[0];
+            u(1, 0) = handle->data->gyro[1];
 
-        if(i == 0) {
-            xpost(0, 0) = roll;
-            xpost(1, 0) = pitch;
+            roll = atan2(accelY,accelZ) * 180 / M_PI;
+            pitch = atan2(accelX,accelZ) * 180 / M_PI;
+
+            if(i == 0) {
+                xpost(0, 0) = roll;
+                xpost(1, 0) = pitch;
+            }
+            else {
+                // Kalman filter prediction
+                xpri = A * xpost + B * u;
+                Ppri = A * Ppost * A.transpose() + V;
+
+                // Measurement update
+                eps(0, 0) = roll;
+                eps(1, 0) = pitch;
+                eps = eps  - C * xpri;
+                S = C * Ppri * C.transpose() + W;
+                K = Ppri * C.transpose() * S.inverse();
+
+                xpost = xpri + K * eps;
+                Ppost = Ppri - K * S * K.transpose();
+            }
+            handle->euler_angles[0] = roll;
+            handle->euler_angles[1] = pitch;
+            handle->euler_angles[2] = xpost.coeff(0, 0);
+            handle->euler_angles[3] = xpost.coeff(1, 0);
+            ++i;
+            HAL_GPIO_WritePin(TASK_CHECK_1_GPIO_Port, TASK_CHECK_1_Pin, GPIO_PIN_RESET);
+            //osDelay(IMU_MEASURE_RATE_MS * portTICK_PERIOD_MS);
         }
-        else {
-            // Kalman filter prediction
-            xpri = A * xpost + B * u;
-            Ppri = A * Ppost * A.transpose() + V;
-
-            // Measurement update
-            eps(0, 0) = roll;
-            eps(1, 0) = pitch;
-            eps = eps  - C * xpri;
-            S = C * Ppri * C.transpose() + W;
-            K = Ppri * C.transpose() * S.inverse();
-
-            xpost = xpri + K * eps;
-            Ppost = Ppri - K * S * K.transpose();
-        }
-        handle->euler_angles[0] = roll;
-        handle->euler_angles[1] = pitch;
-        handle->euler_angles[2] = xpost.coeff(0, 0);
-        handle->euler_angles[3] = xpost.coeff(1, 0);
-        ++i;
-        HAL_GPIO_WritePin(TASK_CHECK_1_GPIO_Port, TASK_CHECK_1_Pin, GPIO_PIN_RESET);
-        osDelay(IMU_MEASURE_RATE_MS * portTICK_PERIOD_MS);
+        osThreadYield();
     }
 }
